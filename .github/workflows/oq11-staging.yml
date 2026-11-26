@@ -1,0 +1,45 @@
+name: Sparse realization staging validation
+on:
+  push:
+    branches: [ci/oq11-staging]
+    paths:
+      - '.github/workflows/oq11-staging.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      OQ_DISTRIBUTE: 'no'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: d53fce627a22f49c7d4d6a23b688beb2d52f9fa8
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Verify exact staging commit
+        run: |
+          test "$(git rev-parse HEAD)" = d53fce627a22f49c7d4d6a23b688beb2d52f9fa8
+      - name: Install engine dependencies
+        run: |
+          python -m pip install --upgrade pip wheel
+          python -m pip install -r requirements-py313-linux64.txt
+          python -m pip install -e .
+          python -m pip install -r requirements-aelo-py-linux64.txt
+          python -m pip install ruff
+          oq engine --upgrade-db
+      - name: Native sparse realization regression
+        run: |
+          python -m pytest -v openquake/calculators/tests/event_based_risk_test.py -k 'sparse_curve_statistics or sparse_realization_curve_stats'
+      - name: Event-based risk regression suite
+        run: |
+          python -m pytest -v openquake/calculators/tests/event_based_risk_test.py
+      - name: Hazard statistics regression
+        run: |
+          python -m pytest -v openquake/hazardlib/tests/stats_test.py
+      - name: Project lint
+        run: |
+          ruff check openquake/calculators/post_risk.py openquake/calculators/tests/event_based_risk_test.py
+          python -m pytest -v openquake/baselib/tests/flake8_test.py
